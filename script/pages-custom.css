@@ -1,0 +1,56 @@
+.custom-octicon-details {
+  display: grid;
+  gap: 16px;
+  padding-block: 8px 24px;
+}
+
+.custom-octicon-details h2,
+.custom-octicon-details h3 {
+  margin: 0;
+}
+
+.custom-octicon-preview {
+  display: grid;
+  min-height: 160px;
+  place-items: center;
+  border: 1px solid var(--borderColor-default, #d1d9e0);
+  border-radius: 6px;
+  background: var(--bgColor-muted, #f6f8fa);
+}
+
+.custom-octicon-preview svg {
+  width: 64px;
+  height: 64px;
+  color: var(--fgColor-default, #1f2328);
+}
+
+.custom-octicon-actions,
+.custom-octicon-size-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.custom-octicon-button {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 1px solid var(--button-default-borderColor-rest, #d1d9e0);
+  border-radius: 6px;
+  background: var(--button-default-bgColor-rest, #f6f8fa);
+  color: var(--fgColor-default, #1f2328);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.custom-octicon-details pre {
+  overflow: auto;
+  margin: 0;
+  padding: 16px;
+  border-radius: 6px;
+  background: var(--bgColor-muted, #f6f8fa);
+  font-size: 12px;
+}
