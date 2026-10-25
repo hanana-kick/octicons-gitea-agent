@@ -12,6 +12,9 @@ on:
       - 'script/optimization-inputs.ts'
       - 'icon-metadata.json'
 name: Optimize SVGs
+
+permissions:
+  contents: write
 jobs:
   optimize:
     runs-on: ubuntu-latest
