@@ -123,6 +123,7 @@
   "git-pull-request-locked": ["pr", "pull", "git", "lock"],
   "git-pull-request-unlisted": ["unlisted", "draft", "pr", "pull", "git"],
   "git-que-merge-agent": ["agent", "ai", "copilot", "pull request", "merge queue", "queued", "automation"],
+  "gitea-agent": ["gitea", "agent", "ai", "bot", "teapot", "automation"],
   "github-action": ["board", "workflow", "action", "automation"],
   "globe": ["world", "earth", "planet", "enterprise"],
   "grabber": ["mover", "drag", "drop", "sort"],
