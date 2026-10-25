@@ -1,3 +1,4 @@
+/* eslint-disable no-console, prefer-template, prettier/prettier */
 import fs from 'node:fs'
 import path from 'node:path'
 import {execFileSync} from 'node:child_process'
@@ -234,6 +235,15 @@ html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
 html = rewriteAssetUrls(html)
 html = injectCustomCards(html, customIcons)
 html = localizeOcticonLinks(html)
+
+html = html.replace(
+  '<div data-icon-detail-placeholder="true"',
+  '<div id="octicons-detail-panel" data-icon-detail-placeholder="true"',
+)
+
+if (!html.includes('id="octicons-detail-panel"')) {
+  throw new Error('Unable to locate the Octicons detail panel')
+}
 
 const styleTag = '<link rel="stylesheet" href="./pages-custom.css">'
 const scriptTag = '<script src="./pages-client.js" defer></script>'

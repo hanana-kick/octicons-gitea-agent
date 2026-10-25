@@ -1,3 +1,4 @@
+/* eslint-disable no-console, no-undef, prefer-template, prettier/prettier */
 (() => {
   const manifestUrl = new URL(
     './octicons-manifest.json',
@@ -28,10 +29,7 @@
   }
 
   function detailsContainer() {
-    return (
-      document.querySelector('[data-icon-detail-placeholder="true"]') ||
-      document.querySelector('.LUOg4a_octiconsSidePanel > div')
-    )
+    return document.getElementById('octicons-detail-panel')
   }
 
   function button(label, onClick) {
@@ -45,7 +43,13 @@
 
   async function showDetails(icon) {
     const container = detailsContainer()
-    if (!container) return
+    if (!container) {
+      throw new Error('Icon detail panel not found')
+    }
+
+    const loading = document.createElement('p')
+    loading.textContent = 'Loading ' + icon.name + '…'
+    container.replaceChildren(loading)
 
     let size = icon.sizes.includes(16)
       ? 16
@@ -125,17 +129,27 @@
       manifest.icons.map(icon => [icon.name, icon]),
     )
 
-    for (const control of iconControls()) {
+    document.addEventListener('click', event => {
+      const control = event.target?.closest?.('a[data-octicon]')
+      if (!control) return
+
       const name = control.dataset.octicon
       const icon = byName.get(name)
-      if (!icon) continue
+      if (!icon) return
 
-      control.addEventListener('click', event => {
-        event.preventDefault()
-        history.replaceState(null, '', '#' + name)
-        showDetails(icon)
+      event.preventDefault()
+      history.replaceState(null, '', '#' + name)
+
+      showDetails(icon).catch(error => {
+        const container = detailsContainer()
+        if (container) {
+          const message = document.createElement('p')
+          message.textContent = 'Unable to load ' + name + '.'
+          container.replaceChildren(message)
+        }
+        console.error('[octicons-gitea-agent]', error)
       })
-    }
+    })
 
     const initialName = decodeURIComponent(
       window.location.hash.replace(/^#/, ''),
@@ -143,7 +157,9 @@
     const initialIcon = byName.get(initialName)
 
     if (initialIcon) {
-      showDetails(initialIcon)
+      showDetails(initialIcon).catch(error => {
+        console.error('[octicons-gitea-agent]', error)
+      })
     }
   }
 
