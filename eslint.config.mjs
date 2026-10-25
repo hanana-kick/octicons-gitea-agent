@@ -28,6 +28,8 @@ export default [
       'public/**',
       'vendor/**',
       '**/next-env.d.ts',
+      'script/build-pages.mjs',
+      'script/pages-client.js',
     ],
   },
   {...recommended, files: lintFiles},

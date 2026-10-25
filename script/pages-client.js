@@ -1,4 +1,3 @@
-/* eslint-disable no-console, no-undef, prefer-template, prettier/prettier */
 (() => {
   const manifestUrl = new URL(
     './octicons-manifest.json',
