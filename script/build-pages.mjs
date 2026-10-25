@@ -7,7 +7,6 @@ const iconsDir = path.join(root, 'icons')
 const outputDir = path.join(root, '_site')
 const originalUrl = 'https://primer-docs-preview.github.com/octicons/'
 const originalOrigin = 'https://primer-docs-preview.github.com'
-const publicOrigin = 'https://primer.style'
 
 function iconName(filename) {
   const match = filename.match(/^(.*)-(\d+)\.svg$/)
@@ -33,28 +32,60 @@ function upstreamIconFiles() {
   )
 }
 
-function rewriteUrls(html) {
+function rewriteAssetUrls(html) {
   return html
     .replace(
-      /\b(href|src|action)=("|')\/(?!\/)/g,
-      (_, attr, quote) => attr + '=' + quote + publicOrigin + '/',
+      /\bsrc=("|')\/(?!\/)/g,
+      (_, quote) => 'src=' + quote + originalOrigin + '/',
     )
-    .replaceAll(originalOrigin, publicOrigin)
+    .replace(
+      /(<link\b[^>]*\bhref=)("|')\/(?!\/)/g,
+      (_, prefix, quote) => prefix + quote + originalOrigin + '/',
+    )
     .replace(/\bsrcset=("|')([^"']+)\1/g, (_, quote, value) => {
       const rewritten = value
         .split(',')
         .map(part => {
           const pieces = part.trim().split(/\s+/)
           if (pieces[0].startsWith('/') && !pieces[0].startsWith('//')) {
-            pieces[0] = publicOrigin + pieces[0]
-          } else if (pieces[0].startsWith(originalOrigin)) {
-            pieces[0] = publicOrigin + pieces[0].slice(originalOrigin.length)
+            pieces[0] = originalOrigin + pieces[0]
           }
           return pieces.join(' ')
         })
         .join(', ')
       return 'srcset=' + quote + rewritten + quote
     })
+}
+
+function localizeOcticonLinks(html) {
+  html = html.replace(
+    /href="https:\/\/primer\.style\/octicons\/icon\/([^"/]+)-(\d+)\/"/g,
+    (_, name) => 'href="#' + name + '" data-octicon="' + name + '"',
+  )
+
+  html = html.replace(
+    /href="https:\/\/primer-docs-preview\.github\.com\/octicons\/icon\/([^"/]+)-(\d+)\/"/g,
+    (_, name) => 'href="#' + name + '" data-octicon="' + name + '"',
+  )
+
+  html = html.replace(
+    /href="\/octicons\/icon\/([^"/]+)-(\d+)\/"/g,
+    (_, name) => 'href="#' + name + '" data-octicon="' + name + '"',
+  )
+
+  html = html.replace(
+    /href="https:\/\/primer\.style\/octicons\/"/g,
+    'href="./"',
+  )
+
+  html = html.replace(
+    /href="https:\/\/primer-docs-preview\.github\.com\/octicons\/"/g,
+    'href="./"',
+  )
+
+  html = html.replace(/href="\/octicons\/"/g, 'href="./"')
+
+  return html
 }
 
 function escapeHtml(value) {
@@ -68,7 +99,9 @@ function escapeHtml(value) {
 
 function cardSvg(name, size) {
   const raw = fs.readFileSync(path.join(iconsDir, name + '-' + size + '.svg'), 'utf8')
-  const viewBox = raw.match(/\bviewBox=(["'])(.*?)\1/)?.[2] ?? ('0 0 ' + size + ' ' + size)
+  const viewBox =
+    raw.match(/\bviewBox=(["'])(.*?)\1/)?.[2] ?? '0 0 ' + size + ' ' + size
+
   const body = raw
     .replace(/^<svg\b[^>]*>/, '')
     .replace(/<\/svg>\s*$/, '')
@@ -88,6 +121,7 @@ function injectCustomCards(html, customIcons) {
 
   const labelToken = '>stack-slash</span>'
   const tokenIndex = html.indexOf(labelToken)
+
   if (tokenIndex < 0) {
     throw new Error('Unable to locate the Octicons Uncategorized insertion point')
   }
@@ -110,10 +144,15 @@ function injectCustomCards(html, customIcons) {
       const labelId = 'custom-octicon-label-' + index + '-' + icon.name
 
       const anchor = referenceAnchor
-        .replace(/aria-labelledby="[^"]+"/, 'aria-labelledby="' + labelId + '"')
+        .replace(
+          /aria-labelledby="[^"]+"/,
+          'aria-labelledby="' + labelId + '"',
+        )
         .replace(
           /href="[^"]+"/,
           'href="#' +
+            escapeHtml(icon.name) +
+            '" data-octicon="' +
             escapeHtml(icon.name) +
             '" data-custom-octicon="' +
             escapeHtml(icon.name) +
@@ -123,13 +162,20 @@ function injectCustomCards(html, customIcons) {
 
       const label = referenceLabel
         .replace(/id="[^"]+"/, 'id="' + labelId + '"')
-        .replace('>stack-slash</span>', '>' + escapeHtml(icon.name) + '</span>')
+        .replace(
+          '>stack-slash</span>',
+          '>' + escapeHtml(icon.name) + '</span>',
+        )
 
       return anchor + label
     })
     .join('')
 
   return html.slice(0, spanEnd) + additions + html.slice(spanEnd)
+}
+
+function countMatches(value, pattern) {
+  return [...value.matchAll(pattern)].length
 }
 
 fs.rmSync(outputDir, {recursive: true, force: true})
@@ -142,9 +188,12 @@ const localFiles = fs
   .sort()
 
 const upstreamFiles = upstreamIconFiles()
-const keywords = JSON.parse(fs.readFileSync(path.join(root, 'keywords.json'), 'utf8'))
+const keywords = JSON.parse(
+  fs.readFileSync(path.join(root, 'keywords.json'), 'utf8'),
+)
 
 const grouped = new Map()
+
 for (const filename of localFiles) {
   const parsed = iconName(filename)
   if (!parsed) continue
@@ -172,17 +221,19 @@ const customIcons = icons.filter(icon => icon.custom)
 
 const response = await fetch(originalUrl)
 if (!response.ok) {
-  throw new Error('Failed to fetch original Octicons page: ' + response.status)
+  throw new Error(
+    'Failed to fetch original Octicons page: ' + response.status,
+  )
 }
 
 let html = await response.text()
 
-// Keep Primer's server-rendered markup and styles. The private Primer Docs
-// runtime is intentionally omitted; the lightweight client below handles
-// search, theme switching and custom-icon details on GitHub Pages.
+// Preserve Primer's server-rendered page and CSS, but replace the private
+// runtime with a small local behavior layer suitable for GitHub Pages.
 html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
-html = rewriteUrls(html)
+html = rewriteAssetUrls(html)
 html = injectCustomCards(html, customIcons)
+html = localizeOcticonLinks(html)
 
 const styleTag = '<link rel="stylesheet" href="./pages-custom.css">'
 const scriptTag = '<script src="./pages-client.js" defer></script>'
@@ -194,6 +245,57 @@ const manifest = {
   generatedAt: new Date().toISOString(),
   originalUrl,
   icons,
+}
+
+const localCardCount = countMatches(html, /\bdata-octicon="[^"]+"/g)
+const externalIconLinkCount = countMatches(
+  html,
+  /href="https:\/\/(?:primer\.style|primer-docs-preview\.github\.com)\/octicons\/icon\//g,
+)
+const customCardCount = countMatches(
+  html,
+  /\bdata-custom-octicon="[^"]+"/g,
+)
+
+if (localCardCount !== icons.length) {
+  throw new Error(
+    'Expected ' +
+      icons.length +
+      ' local icon cards, found ' +
+      localCardCount,
+  )
+}
+
+if (externalIconLinkCount !== 0) {
+  throw new Error(
+    'Found ' +
+      externalIconLinkCount +
+      ' external Octicons detail links',
+  )
+}
+
+if (customCardCount !== customIcons.length) {
+  throw new Error(
+    'Expected ' +
+      customIcons.length +
+      ' custom cards, found ' +
+      customCardCount,
+  )
+}
+
+for (const icon of customIcons) {
+  const customAttribute =
+    'data-custom-octicon="' + icon.name + '"'
+  const count = html.split(customAttribute).length - 1
+
+  if (count !== 1) {
+    throw new Error(
+      'Expected exactly one card for ' +
+        icon.name +
+        ', found ' +
+        count,
+    )
+  }
 }
 
 fs.writeFileSync(path.join(outputDir, 'index.html'), html)
@@ -213,11 +315,12 @@ fs.writeFileSync(path.join(outputDir, '.nojekyll'), '')
 
 console.log('Mirrored original Octicons page')
 console.log('Icons:', icons.length)
+console.log('Local icon cards:', localCardCount)
+console.log('External Octicons detail links:', externalIconLinkCount)
 console.log(
   'Custom icons:',
-  customIcons.length ? customIcons.map(icon => icon.name).join(', ') : '(none)',
+  customIcons.length
+    ? customIcons.map(icon => icon.name).join(', ')
+    : '(none)',
 )
-console.log(
-  'Custom cards in HTML:',
-  customIcons.filter(icon => html.includes('data-custom-octicon="' + icon.name + '"')).length,
-)
+console.log('Custom cards:', customCardCount)
