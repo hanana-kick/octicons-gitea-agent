@@ -6,8 +6,7 @@
 
   function exactLeaf(text) {
     const expected = normalize(text)
-    const elements = document.querySelectorAll('body *')
-    for (const element of elements) {
+    for (const element of document.querySelectorAll('body *')) {
       if (element.children.length === 0 && normalize(element.textContent) === expected) {
         return element
       }
@@ -15,24 +14,35 @@
     return null
   }
 
+  function labelledControl(id) {
+    if (!id) return null
+    for (const element of document.querySelectorAll('[aria-labelledby]')) {
+      if (element.getAttribute('aria-labelledby') === id) return element
+    }
+    return null
+  }
+
+  function labelForControl(control) {
+    if (!control) return null
+    const id = control.getAttribute('aria-labelledby')
+    return id ? document.getElementById(id) : null
+  }
+
   function controlFor(name) {
+    for (const element of document.querySelectorAll('[data-custom-octicon]')) {
+      if (element.getAttribute('data-custom-octicon') === name) return element
+    }
+
     const leaf = exactLeaf(name)
     if (!leaf) return null
+
     return (
+      labelledControl(leaf.id) ||
       leaf.closest('button') ||
       leaf.closest('[role="button"]') ||
       leaf.closest('a') ||
-      leaf.parentElement
+      null
     )
-  }
-
-  function replaceExactText(root, from, to) {
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
-    const nodes = []
-    while (walker.nextNode()) nodes.push(walker.currentNode)
-    for (const node of nodes) {
-      if (normalize(node.nodeValue) === normalize(from)) node.nodeValue = to
-    }
   }
 
   function svgFor(name, size) {
@@ -40,29 +50,6 @@
       if (!response.ok) throw new Error('Unable to load SVG')
       return response.text()
     })
-  }
-
-  async function replaceSvg(root, name, size) {
-    const raw = await svgFor(name, size)
-    const source = new DOMParser().parseFromString(raw, 'image/svg+xml').documentElement
-    let target = root.querySelector('svg')
-
-    if (!target) {
-      target = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-      root.prepend(target)
-    }
-
-    for (const attr of [...target.attributes]) {
-      if (!['class', 'style', 'aria-hidden', 'focusable'].includes(attr.name)) {
-        target.removeAttribute(attr.name)
-      }
-    }
-
-    target.setAttribute('viewBox', source.getAttribute('viewBox') || '0 0 ' + size + ' ' + size)
-    target.setAttribute('width', String(size))
-    target.setAttribute('height', String(size))
-    target.setAttribute('fill', 'currentColor')
-    target.innerHTML = source.innerHTML
   }
 
   function findDetailsPlaceholder() {
@@ -84,8 +71,8 @@
     const placeholder = findDetailsPlaceholder()
     if (!placeholder) return
 
-    const size = icon.sizes.includes(16) ? 16 : icon.sizes[0]
-    const raw = await svgFor(icon.name, size)
+    let size = icon.sizes.includes(16) ? 16 : icon.sizes[0]
+    let raw = await svgFor(icon.name, size)
 
     const panel = document.createElement('div')
     panel.className = 'custom-octicon-details'
@@ -122,103 +109,41 @@
 
     const sizes = document.createElement('div')
     sizes.className = 'custom-octicon-size-list'
+
     for (const candidate of icon.sizes) {
       sizes.append(
         button(candidate + 'px', async () => {
-          const next = await svgFor(icon.name, candidate)
-          preview.innerHTML = next
-          const anchor = actions.querySelector('a')
-          anchor.href = URL.createObjectURL(new Blob([next], {type: 'image/svg+xml'}))
-          anchor.download = icon.name + '-' + candidate + '.svg'
+          size = candidate
+          raw = await svgFor(icon.name, candidate)
+          preview.innerHTML = raw
+          download.href = URL.createObjectURL(new Blob([raw], {type: 'image/svg+xml'}))
+          download.download = icon.name + '-' + candidate + '.svg'
         }),
       )
     }
+
     panel.append(sizes)
 
-    const usageTitle = document.createElement('h3')
-    usageTitle.textContent = 'Usage'
-    panel.append(usageTitle)
+    const sourceTitle = document.createElement('h3')
+    sourceTitle.textContent = 'Source'
+    panel.append(sourceTitle)
 
     const code = document.createElement('pre')
-    const component =
-      icon.name
-        .split('-')
-        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-        .join('') + 'Icon'
-    code.textContent =
-      "import {" +
-      component +
-      "} from '@primer/octicons-react'\n\n<" +
-      component +
-      ' size={' +
-      size +
-      '} />'
+    code.textContent = 'icons/' + icon.name + '-' + size + '.svg'
     panel.append(code)
 
     placeholder.replaceChildren(panel)
   }
 
-  async function addCustomCards(manifest) {
-    const customIcons = manifest.icons.filter(icon => icon.custom)
-    if (!customIcons.length) return
-
-    let reference =
-      controlFor('stack-slash') ||
-      controlFor('git-que-merge-agent') ||
-      controlFor(manifest.icons.find(icon => !icon.custom)?.name)
-
-    if (!reference || !reference.parentElement) return
-
-    let insertAfter = reference
-    for (const icon of customIcons) {
-      const clone = reference.cloneNode(true)
-      replaceExactText(clone, normalize(reference.textContent), icon.name)
-
-      // Some cards include the icon name in nested labels rather than as the
-      // control's full text, so replace the known reference label as well.
-      const referenceName =
-        manifest.icons.find(item => controlFor(item.name) === reference)?.name ||
-        'stack-slash'
-      replaceExactText(clone, referenceName, icon.name)
-
-      clone.removeAttribute('href')
-      clone.setAttribute('data-custom-octicon', icon.name)
-      clone.addEventListener(
-        'click',
-        event => {
-          event.preventDefault()
-          event.stopPropagation()
-          showCustomDetails(icon)
-        },
-        true,
-      )
-
-      const size = icon.sizes.includes(16) ? 16 : icon.sizes[0]
-      replaceSvg(clone, icon.name, size).catch(() => {})
-
-      insertAfter.insertAdjacentElement('afterend', clone)
-      insertAfter = clone
-    }
-  }
-
-  function bindExistingIcons(manifest) {
-    for (const icon of manifest.icons) {
-      if (icon.custom) continue
+  function bindCustomIcons(manifest) {
+    for (const icon of manifest.icons.filter(item => item.custom)) {
       const control = controlFor(icon.name)
       if (!control) continue
 
-      control.addEventListener(
-        'click',
-        event => {
-          event.preventDefault()
-          const size = icon.sizes.includes(16) ? 16 : icon.sizes[0]
-          window.location.href =
-            'https://primer.style/octicons/icon/' +
-            encodeURIComponent(icon.name + '-' + size) +
-            '/'
-        },
-        true,
-      )
+      control.addEventListener('click', event => {
+        event.preventDefault()
+        showCustomDetails(icon)
+      })
     }
   }
 
@@ -229,17 +154,23 @@
     if (!input) return
 
     const entries = manifest.icons
-      .map(icon => ({
-        icon,
-        control: controlFor(icon.name),
-        haystack: normalize([icon.name, ...(icon.keywords || [])].join(' ')),
-      }))
+      .map(icon => {
+        const control = controlFor(icon.name)
+        return {
+          control,
+          label: labelForControl(control),
+          haystack: normalize([icon.name, ...(icon.keywords || [])].join(' ')),
+        }
+      })
       .filter(entry => entry.control)
 
     const update = () => {
       const query = normalize(input.value)
+
       for (const entry of entries) {
-        entry.control.hidden = Boolean(query) && !entry.haystack.includes(query)
+        const hidden = Boolean(query) && !entry.haystack.includes(query)
+        entry.control.hidden = hidden
+        if (entry.label) entry.label.hidden = hidden
       }
     }
 
@@ -248,8 +179,7 @@
   }
 
   function bindThemeToggle() {
-    const candidates = [...document.querySelectorAll('button')]
-    const toggle = candidates.find(button =>
+    const toggle = [...document.querySelectorAll('button')].find(button =>
       /switch to (dark|light) mode/i.test(button.textContent || ''),
     )
     if (!toggle) return
@@ -267,10 +197,10 @@
   async function init() {
     const response = await fetch(manifestUrl)
     if (!response.ok) return
+
     const manifest = await response.json()
 
-    await addCustomCards(manifest)
-    bindExistingIcons(manifest)
+    bindCustomIcons(manifest)
     bindSearch(manifest)
     bindThemeToggle()
   }
