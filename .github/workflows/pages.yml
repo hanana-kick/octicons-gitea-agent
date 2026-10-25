@@ -8,6 +8,8 @@ on:
       - 'icons/**'
       - 'keywords.json'
       - 'script/build-pages.mjs'
+      - 'script/pages-client.js'
+      - 'script/pages-custom.css'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -35,7 +37,7 @@ jobs:
         with:
           enablement: true
 
-      - name: Build catalogue
+      - name: Build original Octicons page
         run: node script/build-pages.mjs
 
       - name: Upload Pages artifact
